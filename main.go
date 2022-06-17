@@ -241,7 +241,7 @@ func commandBuild() {
 			if err != nil {
 				return err
 			}
-			fmt.Println("built:", path, "->", outpath)
+			fmt.Println("built:", relpath, "->", outpath)
 			err = ioutil.WriteFile(outpath, html_bytes, 0644)
 			if err != nil {
 				hookPostFile(outpath)
