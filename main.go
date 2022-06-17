@@ -57,7 +57,9 @@ var (
 	SOURCE_DIR  string
 )
 
-// HELPER FUNCTION
+//// HELPER FUNCTION
+// the following functions fulfill various, non-central functions, and could be called
+// an arbitrary amount of times, during arbitrary steps in the build pipeline
 func checkerr(err error) {
 	if err != nil {
 		panic(err)
@@ -81,71 +83,101 @@ func readConfigFile() Config {
 	return conf
 }
 
+//// FLAG BUILDERS
+// the following functions each build a list of 'goldmark' Extenders/Options,
+// based on the boolean values found in the config file.
+// -------------------------------------------------------------------------
+
+// this function builds a list of 'goldmark' Extenders.
+// see https://github.com/yuin/goldmark#built-in-extensions for more
+// information on the individual extensions.
 func buildExtensionList(conf Config) []gm.Extender {
-	var el []gm.Extender
+	var extList []gm.Extender
 	e := conf.Extensions
 	if e.Table {
-		el = append(el, gme.Table)
+		extList = append(extList, gme.Table)
 	}
 	if e.Strikethrough {
-		el = append(el, gme.Strikethrough)
+		extList = append(extList, gme.Strikethrough)
 	}
 	if e.Linkify {
-		el = append(el, gme.Linkify)
+		extList = append(extList, gme.Linkify)
 	}
 	if e.TaskList {
-		el = append(el, gme.TaskList)
+		extList = append(extList, gme.TaskList)
 	}
 	if e.DefinitionList {
-		el = append(el, gme.DefinitionList)
+		extList = append(extList, gme.DefinitionList)
 	}
 	if e.Footnote {
-		el = append(el, gme.Footnote)
+		extList = append(extList, gme.Footnote)
 	}
 	if e.Typographer {
-		el = append(el, gme.Typographer)
+		extList = append(extList, gme.Typographer)
 	}
-	return el
+	return extList
 }
 
+// this function builds a list of 'goldmark' parser-options, based on the boolean
+// values found in the config struct that is passed.
+// these extend/modify the capabilities of the parsing step.
+// see https://github.com/yuin/goldmark#parser-options for more information
 func buildParserOptList(conf Config) []gmp.Option {
-	po := conf.ParserOptions
-	var pol []gmp.Option
+	po := conf.ParserOptions // ParserOptions is a nested struct in the Config struct
+	var parserOptList []gmp.Option
 	if po.WithAttribute {
-		pol = append(pol, gmp.WithAttribute())
+		parserOptList = append(parserOptList, gmp.WithAttribute())
 	}
 	if po.WithAutoHeadingID {
-		pol = append(pol, gmp.WithAutoHeadingID())
+		parserOptList = append(parserOptList, gmp.WithAutoHeadingID())
 	}
-	return pol
+	return parserOptList
 }
 
+// this function builds a list of 'goldmark' renderer-options, based on the boolean
+// values found in the config struct that is passed.
+// these extend/modify the capabilities of the rendering step.
+// see https://github.com/yuin/goldmark#html-renderer-options for more information
 func buildRendererOptList(conf Config) []gmr.Option {
-	ro := conf.RendererOptions
-	var rol []gmr.Option
+	ro := conf.RendererOptions // RendererOptions is a nested struct in the Config struct
+	var rendererOptList []gmr.Option
 	if ro.WithHardWraps {
-		rol = append(rol, gmhtml.WithHardWraps())
+		rendererOptList = append(rendererOptList, gmhtml.WithHardWraps())
 	}
 	if ro.WithXHTML {
-		rol = append(rol, gmhtml.WithXHTML())
+		rendererOptList = append(rendererOptList, gmhtml.WithXHTML())
 	}
 	if ro.WithUnsafe {
-		rol = append(rol, gmhtml.WithUnsafe())
+		rendererOptList = append(rendererOptList, gmhtml.WithUnsafe())
 	}
-	return rol
+	return rendererOptList
 }
 
-// HOOKS
+//// HOOKS
+// each of these functions represents the execution of one of the 'hooks'.
+// the functions will be called at their respective steps in the build-pipeline
+// and thus can be used to run code (or external addons) at these specific points.
+
+// this hook is part of the 'build' command.
+// it is called right at the beginning, before any processing happens.
 func hookPre() {
 	if PRINT_HOOK {
 		fmt.Println("Running pre-hook:")
 	}
 }
+
+// this hook is part of the 'build' command.
+// it is called right before a Markdown file is read for processing.
+// this makes it useful for modifying the source (.md) file ahead of processing.
 func hookPreFile(filepath string) {
 	if PRINT_HOOK {
 		fmt.Printf("Running pre-file-hook on %s:\n", filepath)
 	}
 }
+
+// this hook is part of the 'build' command.
+// it is called right before a Markdown file is read for processing.
+// this makes it useful for modifying the source (.md) file ahead of processing.
 func hookPostFile(filepath string) {
 	if PRINT_HOOK {
 		fmt.Printf("Running post-file-hook on %s:\n", filepath)
@@ -158,6 +190,7 @@ func hookPost() {
 }
 
 // COMMANDS
+// the following
 var commands map[string]func()
 
 func registerCommands() {
