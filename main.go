@@ -10,45 +10,39 @@ import (
 	"strings"
 
 	gm "github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/renderer/html"
+	gme "github.com/yuin/goldmark/extension"
+	gmp "github.com/yuin/goldmark/parser"
+	gmr "github.com/yuin/goldmark/renderer"
+	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"gopkg.in/yaml.v2"
 )
 
-type MdExts struct {
-	NoInstraEmph     bool `yaml:"no_intra_emphasis"`
-	Tables           bool `yaml:"tables"`
-	FencedCode       bool `yaml:"fenced_code"`
-	Autolinking      bool `yaml:"autolinking"`
-	Strikethrough    bool `yaml:"strikethrough"`
-	HardLineBreak    bool `yaml:"hard_line_break"`
-	Footnotes        bool `yaml:"footnotes"`
-	PandocTitleblock bool `yaml:"pandoc_titleblock"`
-	CustomHeaderIds  bool `yaml:"header_ids"`
-	DefinitionLists  bool `yaml:"definition_lists"`
+type Exts struct {
+	Table          bool `yaml:"tables"`
+	Strikethrough  bool `yaml:"strikethrough"`
+	Linkify        bool `yaml:"autolinks"`
+	TaskList       bool `yaml:"task_list"`
+	DefinitionList bool `yaml:"definition_list"`
+	Footnote       bool `yaml:"footnotes"`
+	Typographer    bool `yaml:"typographer"`
 }
 
-type HtmlExts struct {
-	TOC                 bool `yaml:"table_of_contents"`     // Generate table of contents with links
-	SkipHTML            bool `yaml:"skip_html"`             // Skip preformatted HTML blocks
-	SkipImages          bool `yaml:"skip_images"`           // Skip embedded images
-	SkipLinks           bool `yaml:"skip_links"`            // Skip all links
-	Safelink            bool `yaml:"safe_links"`            // Only link to trusted protocols
-	NofollowLinks       bool `yaml:"nofollow_links"`        // Only link with rel="nofollow"
-	NoreferrerLinks     bool `yaml:"noreferrer_links"`      // Only link with rel="noreferrer"
-	NoopenerLinks       bool `yaml:"noopener_links"`        // Only link with rel="noopener"
-	HrefTargetBlank     bool `yaml:"blank_target_links"`    // Add a blank target
-	CompletePage        bool `yaml:"complete_page"`         // Generate a complete HTML page
-	UseXHTML            bool `yaml:"xhtml"`                 // Generate XHTML output instead of HTML
-	FootnoteReturnLinks bool `yaml:"footnote_return_links"` // Generate a link at the end of a footnote to return to the source
-	Smartypants         bool `yaml:"smartypants"`           // Enable smart punctuation substitutions
+type ParserOpts struct {
+	WithAttribute     bool `yaml:"custom_heading_attrs"`
+	WithAutoHeadingID bool `yaml:"auto_heading_id"`
+}
+
+type RendererOpts struct {
+	WithHardWraps bool `yaml:"hard_wraps"`
+	WithXHTML     bool `yaml:"xhtml"`
+	WithUnsafe    bool `yaml:"unsafe_rendering"`
 }
 
 type Config struct {
-	Outdir         string   `yaml:"outdir"`
-	MdExtensions   MdExts   `yaml:"md_extensions"`
-	HtmlExtensions HtmlExts `yaml:"html_extensions"`
+	Outdir          string       `yaml:"outdir"`
+	Extensions      Exts         `yaml:"extensions"`
+	ParserOptions   ParserOpts   `yaml:"parser_options"`
+	RendererOptions RendererOpts `yaml:"renderer_options"`
 }
 
 // GLOBAL CONSTANTS
@@ -87,10 +81,58 @@ func readConfigFile() Config {
 	return conf
 }
 
-func buildHtmlFlags(c Config) {
+func buildExtensionList(conf Config) []gm.Extender {
+	var el []gm.Extender
+	e := conf.Extensions
+	if e.Table {
+		el = append(el, gme.Table)
+	}
+	if e.Strikethrough {
+		el = append(el, gme.Strikethrough)
+	}
+	if e.Linkify {
+		el = append(el, gme.Linkify)
+	}
+	if e.TaskList {
+		el = append(el, gme.TaskList)
+	}
+	if e.DefinitionList {
+		el = append(el, gme.DefinitionList)
+	}
+	if e.Footnote {
+		el = append(el, gme.Footnote)
+	}
+	if e.Typographer {
+		el = append(el, gme.Typographer)
+	}
+	return el
 }
 
-func buildMdFlags(c Config) {
+func buildParserOptList(conf Config) []gmp.Option {
+	po := conf.ParserOptions
+	var pol []gmp.Option
+	if po.WithAttribute {
+		pol = append(pol, gmp.WithAttribute())
+	}
+	if po.WithAutoHeadingID {
+		pol = append(pol, gmp.WithAutoHeadingID())
+	}
+	return pol
+}
+
+func buildRendererOptList(conf Config) []gmr.Option {
+	ro := conf.RendererOptions
+	var rol []gmr.Option
+	if ro.WithHardWraps {
+		rol = append(rol, gmhtml.WithHardWraps())
+	}
+	if ro.WithXHTML {
+		rol = append(rol, gmhtml.WithXHTML())
+	}
+	if ro.WithUnsafe {
+		rol = append(rol, gmhtml.WithUnsafe())
+	}
+	return rol
 }
 
 // HOOKS
@@ -133,32 +175,23 @@ func commandInit() {
 		// create config file
 		defaultConfig := Config{
 			Outdir: filepath.Join(WORKING_DIR, "build"),
-			MdExtensions: MdExts{
-				NoInstraEmph:     true,
-				Tables:           true,
-				FencedCode:       true,
-				Autolinking:      true,
-				Strikethrough:    true,
-				HardLineBreak:    false,
-				Footnotes:        false,
-				PandocTitleblock: false,
-				CustomHeaderIds:  true,
-				DefinitionLists:  false,
+			Extensions: Exts{
+				Table:          true,
+				Strikethrough:  true,
+				Linkify:        true,
+				TaskList:       false,
+				DefinitionList: false,
+				Footnote:       false,
+				Typographer:    false,
 			},
-			HtmlExtensions: HtmlExts{
-				TOC:                 false,
-				SkipHTML:            false,
-				SkipImages:          false,
-				SkipLinks:           false,
-				Safelink:            false,
-				NofollowLinks:       false,
-				NoreferrerLinks:     false,
-				NoopenerLinks:       false,
-				HrefTargetBlank:     false,
-				CompletePage:        false,
-				UseXHTML:            true,
-				FootnoteReturnLinks: false,
-				Smartypants:         false,
+			ParserOptions: ParserOpts{
+				WithAttribute:     true,
+				WithAutoHeadingID: false,
+			},
+			RendererOptions: RendererOpts{
+				WithHardWraps: false,
+				WithXHTML:     true,
+				WithUnsafe:    false,
 			},
 		}
 		yamlData, err := yaml.Marshal(&defaultConfig)
@@ -192,25 +225,35 @@ func commandBuild() {
 			return nil
 		}
 
+		relpath := strings.TrimPrefix(path, SOURCE_DIR)
+		outpath := filepath.Join(config.Outdir, relpath)
 		if info.IsDir() {
 			// mirror directory structure in out dir
-			os.Mkdir(filepath.Join(config.Outdir, path), 0755)
+			os.Mkdir(outpath, 0755)
 			return nil
-		} else {
+		} else if strings.HasSuffix(relpath, ".md") {
+			outpath := strings.TrimSuffix(outpath, ".md")
+			outpath = outpath + ".html"
 			// run file hook
 			hookPreFile(path)
 			// process file
-			fmt.Println("building:", path)
-			outpath := filepath.Join(config.Outdir, path)
 			html_bytes, err := renderMdToHtml(path, config)
-			fmt.Println(string(html_bytes))
-			if err == nil {
+			if err != nil {
 				return err
 			}
+			fmt.Println("built:", path, "->", outpath)
 			err = ioutil.WriteFile(outpath, html_bytes, 0644)
 			if err != nil {
 				hookPostFile(outpath)
 			}
+			return err
+		} else {
+			// just copy other file types
+			srcfile, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			err = ioutil.WriteFile(outpath, srcfile, 0644)
 			return err
 		}
 	})
@@ -224,24 +267,15 @@ func renderMdToHtml(filepath string, config Config) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(string(md_bytes))
 
-	md := gm.New(
-		gm.WithExtensions(extension.GFM, extension.Footnote),
-		gm.WithParserOptions(
-			parser.WithAutoHeadingID(),
-		),
-		gm.WithRendererOptions(
-			html.WithHardWraps(),
-			html.WithXHTML(),
-		),
+	md := gm.New( // register all options and exts as per config file to the processor
+		gm.WithExtensions(buildExtensionList(config)...),
+		gm.WithParserOptions(buildParserOptList(config)...),
+		gm.WithRendererOptions(buildRendererOptList(config)...),
 	)
 	var buf bytes.Buffer
 	err = md.Convert(md_bytes, &buf)
 	html_bytes := buf.Bytes()
-	//html_bytes := bf.Run(md_bytes, bf.WithExtensions(buildMdFlags(config)), bf.WithRenderer(bf.NewHTMLRenderer(bf.HTMLRendererParameters{
-	//	Flags: buildHtmlFlags(config),
-	//})))
 	return html_bytes, err
 }
 
