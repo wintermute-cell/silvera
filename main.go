@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	gmtoc "github.com/abhinav/goldmark-toc"
+	gmwiki "github.com/abhinav/goldmark-wikilink"
+	gmmathjax "github.com/litao91/goldmark-mathjax"
 	gm "github.com/yuin/goldmark"
 	gme "github.com/yuin/goldmark/extension"
 	gmp "github.com/yuin/goldmark/parser"
@@ -19,13 +22,16 @@ import (
 
 // this struct contains the user config values regarding internal goldmark (gm) extensions.
 type Exts struct {
-	Table          bool `yaml:"tables"`
-	Strikethrough  bool `yaml:"strikethrough"`
-	Linkify        bool `yaml:"autolinks"`
-	TaskList       bool `yaml:"task_list"`
-	DefinitionList bool `yaml:"definition_list"`
-	Footnote       bool `yaml:"footnotes"`
-	Typographer    bool `yaml:"typographer"`
+	Table           bool `yaml:"tables"`
+	Strikethrough   bool `yaml:"strikethrough"`
+	Linkify         bool `yaml:"autolinks"`
+	TaskList        bool `yaml:"task_list"`
+	DefinitionList  bool `yaml:"definition_list"`
+	Footnote        bool `yaml:"footnotes"`
+	Typographer     bool `yaml:"typographer"`
+	Wikilink        bool `yaml:"wikilink"`
+	Mathjax         bool `yaml:"mathjax"`
+	TableOfContents bool `yaml:"table_of_contents"`
 }
 
 // this struct contains the user config values regarding parser options.
@@ -121,6 +127,16 @@ func buildExtensionList(conf Config) []gm.Extender {
 	}
 	if e.Typographer {
 		extList = append(extList, gme.Typographer)
+	}
+	// third party extensions
+	if e.Wikilink {
+		extList = append(extList, &gmwiki.Extender{})
+	}
+	if e.Mathjax {
+		extList = append(extList, gmmathjax.MathJax)
+	}
+	if e.TableOfContents {
+		extList = append(extList, &gmtoc.Extender{})
 	}
 	return extList
 }
@@ -219,6 +235,7 @@ func registerCommands() {
 // default values defined here.
 func commandInit() {
 	confpath := filepath.Join(WORKING_DIR, "silvera.conf")
+
 	// check if there is already a config file. if so, assume that this is already a workspace and return.
 	if _, err := os.Stat(confpath); err == nil {
 		fmt.Println("This directory already appears to be a silvera workspace. Nothing changed.")
@@ -228,13 +245,16 @@ func commandInit() {
 		defaultConfig := Config{
 			Outdir: filepath.Join(WORKING_DIR, "build"),
 			Extensions: Exts{
-				Table:          true,
-				Strikethrough:  true,
-				Linkify:        true,
-				TaskList:       false,
-				DefinitionList: false,
-				Footnote:       false,
-				Typographer:    false,
+				Table:           true,
+				Strikethrough:   true,
+				Linkify:         true,
+				TaskList:        false,
+				DefinitionList:  false,
+				Footnote:        false,
+				Typographer:     false,
+				Wikilink:        true,
+				Mathjax:         false,
+				TableOfContents: false,
 			},
 			ParserOptions: ParserOpts{
 				WithAttribute:     true,
