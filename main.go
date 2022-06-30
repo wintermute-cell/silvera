@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
+	"github.com/PuerkitoBio/goquery"
 	gmtoc "github.com/abhinav/goldmark-toc"
 	gmwiki "github.com/abhinav/goldmark-wikilink"
 	gmmathjax "github.com/litao91/goldmark-mathjax"
@@ -51,6 +53,7 @@ type RendererOpts struct {
 // it is compromised of several structs defined above.
 type Config struct {
 	Outdir          string       `yaml:"outdir"`
+	Templatedir     string       `yaml:"template"`
 	Extensions      Exts         `yaml:"extensions"`
 	ParserOptions   ParserOpts   `yaml:"parser_options"`
 	RendererOptions RendererOpts `yaml:"renderer_options"`
@@ -85,15 +88,53 @@ func printUsage() {
 	fmt.Println("silvera build  -  Build the files from ./src")
 }
 
-func readConfigFile() Config {
-	f, err := ioutil.ReadFile("silvera.conf")
+func getFirstHeadingFromHtml(html_content string) string {
+	// create a new goquery document. Doing this on a pure string doesn't work, have to use a reader.
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(html_content)))
 	checkerr(err)
 
-	var conf Config
+	heading := doc.Find("h1:first-of-type").Text() // search for the first h1 element
+
+	return heading
+}
+
+// reads a config file from the given path, using the parent_conf as a base
+func readConfigFile(file_path string, parent_conf Config) Config {
+	f, err := ioutil.ReadFile(file_path)
+	checkerr(err)
+
+	var conf Config = parent_conf // initialize the new config with its parent. new values will overwrite the old ones.
 	err = yaml.Unmarshal(f, &conf)
 	checkerr(err)
 
+	fmt.Printf("Read config file at %s\n", file_path)
+
 	return conf
+}
+
+// given a file path, will return the config most closely matching that path.
+// if no local config exists, return nil.
+func getMostSpecificConfig(confMap map[string]Config, file_path string) *Config {
+	fileInfo, err := os.Stat(file_path)
+	checkerr(err)
+
+	// if the given path points to a file, remove the file from the path and use just the dir path
+	var dir_path string
+	if fileInfo.IsDir() {
+		dir_path = filepath.Clean(file_path)
+	} else {
+		dir_path = filepath.Dir(file_path)
+	}
+
+	for dir_path != SOURCE_DIR { // as long as the path is more specific than the src root, keep searching.
+		if conf, ok := confMap[dir_path]; ok {
+			fmt.Println("Using local conf for", dir_path)
+			return &conf
+		} else {
+			dir_path = filepath.Clean(strings.TrimSuffix(dir_path, filepath.Base(dir_path))) // shorten the path by its last step, making it less specific
+		}
+	}
+	return nil
 }
 
 //// FLAG BUILDERS
@@ -243,7 +284,8 @@ func commandInit() {
 	} else {
 		// create default config file
 		defaultConfig := Config{
-			Outdir: filepath.Join(WORKING_DIR, "build"),
+			Outdir:      filepath.Join(WORKING_DIR, "build"),
+			Templatedir: filepath.Join(WORKING_DIR, "template.html"),
 			Extensions: Exts{
 				Table:           true,
 				Strikethrough:   true,
@@ -273,8 +315,16 @@ func commandInit() {
 		err = os.WriteFile(confpath, []byte(yamlData), 0644)
 		checkerr(err)
 
+		// create a default template.html file
+		err = os.WriteFile(defaultConfig.Templatedir, []byte("\n"), 0644)
+		checkerr(err)
+
 		// create a src directory
 		err = os.MkdirAll(SOURCE_DIR, 0755)
+		checkerr(err)
+
+		// create a build directory
+		err = os.MkdirAll(defaultConfig.Outdir, 0755)
 		checkerr(err)
 
 		fmt.Printf("Initialized new silvera workspace at %s\n", WORKING_DIR)
@@ -286,25 +336,49 @@ func commandInit() {
 // Only '.md' files are actually processed and turned into '.html' files, all other files and directories are
 // simply copied over.
 func commandBuild() {
-	config := readConfigFile()
-	os.MkdirAll(config.Outdir, 0755) // if necessary, create the build directory as given in the config file.
+	config := readConfigFile("silvera.conf", Config{}) // read a new config with an empty parent. This is the global config.
+	os.MkdirAll(config.Outdir, 0755)                   // if necessary, create the build directory as given in the config file.
 
 	hookPre() // run the pre-processing hook
 
+	localConfigs := make(map[string]Config) // this map holds configuration structs based on directory names
+
 	// recursively walk through the source directory
 	filepath.Walk(SOURCE_DIR, func(path string, info os.FileInfo, err error) error {
-		// ignore dot- files and directories
-		if filepath.Base(path)[0] == '.' || strings.HasPrefix(path, ".") {
-			return nil
+		// if a HIDDEN_DIR local config dir is encountered, see if it has a configuration file
+		if filepath.Base(path) == HIDDEN_DIR && info.IsDir() {
+			conf_path := filepath.Join(path, "silvera.conf") // the path where the config should be located
+			if _, err := os.Stat(conf_path); err == nil {    // if the config exists and is readable...
+				localConfigs[filepath.Clean(strings.TrimSuffix(path, HIDDEN_DIR))] = readConfigFile(conf_path, config) // ...then load it into the localConfigs map
+			}
+			return filepath.SkipDir
 		}
+
+		// ignore other dot- files and directories
+		if filepath.Base(path)[0:1] == "." || strings.HasPrefix(path, ".") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			} else {
+				return nil
+			}
+		}
+
 		// don't stop on errors, just output them. We don't want a single file error to prevent building.
 		if err != nil {
 			fmt.Println("Err:", err)
 			return nil
 		}
 
-		relpath := strings.TrimPrefix(path, SOURCE_DIR)  // get the relative path of the source directory.
-		outpath := filepath.Join(config.Outdir, relpath) // get the relative path of the build directory.
+		// determine a configuration used for this path
+		var localConf Config
+		if c := getMostSpecificConfig(localConfigs, path); c != nil { // if there is a local config, use that one
+			localConf = *c
+		} else { // if there is no local config, use the global one
+			localConf = config
+		}
+
+		relpath := strings.TrimPrefix(path, SOURCE_DIR)     // get the relative path in the source directory.
+		outpath := filepath.Join(localConf.Outdir, relpath) // get the relative path in the build directory.
 
 		// if a directory is encountered, just copy/mirror it over to the build dir.
 		if info.IsDir() {
@@ -317,15 +391,18 @@ func commandBuild() {
 			// run pre-file-processing hook
 			hookPreFile(path)
 			// process the file to html
-			html_bytes, err := renderMdToHtml(path, config)
+			html_bytes, err := renderMdToHtml(path, localConf)
 			if err != nil {
 				return err
 			}
 
+			// embed the processed html in the template file
+			full_html_bytes := embedHtmlInTemplate(html_bytes, relpath, localConf)
+
 			fmt.Println("built:", relpath, "->", outpath)
 
 			// write the html byte slice to the file-path determined above, ending in '.md'.
-			err = ioutil.WriteFile(outpath, html_bytes, 0644)
+			err = ioutil.WriteFile(outpath, full_html_bytes, 0644)
 			if err != nil {
 				// if all went well so far, run the post-file-processing hook
 				hookPostFile(outpath)
@@ -372,6 +449,32 @@ func renderMdToHtml(filepath string, config Config) ([]byte, error) {
 	return html_bytes, err
 }
 
+// this function takes in the already processed html as a byte slice, and using golangs html/template
+// library, embeds these contents in the template.
+func embedHtmlInTemplate(html_contents []byte, curr_path string, config Config) []byte {
+	// this struct will hold the data to be embedded into to template
+	type EmbeddableContents struct {
+		Title string
+		Body  string
+		Path  string
+	}
+
+	fmt.Println(config.Templatedir)
+	tmpl := template.Must(template.ParseFiles(config.Templatedir)) // read in the template file, panicking on failure
+
+	contents := EmbeddableContents{
+		Title: getFirstHeadingFromHtml(string(html_contents)),
+		Body:  string(html_contents),
+		Path:  curr_path,
+	}
+
+	var buf bytes.Buffer
+	tmpl.Execute(&buf, contents)
+	total_html := buf.Bytes()
+
+	return total_html
+}
+
 //// MAIN
 // the following functions are called directly when running the program, and bootstrap the execution.
 // -------------------------------------------------------------------------------------------------
@@ -386,7 +489,7 @@ func init() {
 	WORKING_DIR = path
 
 	// source path
-	SOURCE_DIR = filepath.Join(WORKING_DIR, "src")
+	SOURCE_DIR = filepath.Join(WORKING_DIR, "src/")
 }
 
 // the main function is the entrypoint to this program.
