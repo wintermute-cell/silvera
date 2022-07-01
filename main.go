@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -57,6 +58,7 @@ type Config struct {
 	Extensions      Exts         `yaml:"extensions"`
 	ParserOptions   ParserOpts   `yaml:"parser_options"`
 	RendererOptions RendererOpts `yaml:"renderer_options"`
+	Plugins         []string     `yaml:"plugins"`
 }
 
 // GLOBAL CONSTANTS
@@ -69,6 +71,7 @@ const (
 var (
 	WORKING_DIR string
 	SOURCE_DIR  string
+	PLUGIN_DIR  string
 )
 
 //// HELPER FUNCTION
@@ -135,6 +138,37 @@ func getMostSpecificConfig(confMap map[string]Config, file_path string) *Config 
 		}
 	}
 	return nil
+}
+
+// this contains the logic for executing all the hooks, since they behave largely the same.
+func runHookForPrefix(conf Config, prefix string, args []string) {
+	for _, plugin_name := range conf.Plugins {
+		plugin_dir := filepath.Join(PLUGIN_DIR, plugin_name)
+		files, err := ioutil.ReadDir(plugin_dir)
+		checkerr(err)
+		for _, file := range files {
+			if !file.IsDir() && strings.HasPrefix(file.Name(), prefix) {
+				cmd := filepath.Join(filepath.Join(PLUGIN_DIR, plugin_name), file.Name())
+				var out []byte
+				ext := filepath.Ext(file.Name())
+				if ext == ".py" {
+					args = append([]string{cmd}, args...) // when using an interpreter like python, the program is an arg to the interpreter
+					out, err = exec.Command("python", args...).Output()
+				} else if ext == ".sh" {
+					args = append([]string{cmd}, args...)
+					out, err = exec.Command("bash", args...).Output()
+				} else {
+					out, err = exec.Command(cmd, args...).Output()
+				}
+				checkerr(err)
+				if PRINT_HOOK {
+					fmt.Printf("Ran plugin: %s\n", cmd)
+					fmt.Printf("PLUG_OUT:\n %s\n", out)
+				}
+			}
+		}
+	}
+
 }
 
 //// FLAG BUILDERS
@@ -225,36 +259,28 @@ func buildRendererOptList(conf Config) []gmr.Option {
 
 // this hook is part of the 'build' command.
 // it is called right at the beginning, before any processing happens.
-func hookPre() {
-	if PRINT_HOOK {
-		fmt.Println("Running pre-hook:")
-	}
+func hookPre(conf Config) {
+	runHookForPrefix(conf, "prh__", []string{})
 }
 
 // this hook is part of the 'build' command.
 // it is called right before a Markdown file is read for processing.
 // this makes it useful for modifying the source (.md) file ahead of processing.
-func hookPreFile(filepath string) {
-	if PRINT_HOOK {
-		fmt.Printf("Running pre-file-hook on %s:\n", filepath)
-	}
+func hookPreFile(conf Config, filepath string) {
+	runHookForPrefix(conf, "prf__", []string{filepath})
 }
 
 // this hook is part of the 'build' command.
 // it is called right before a Markdown file is read for processing.
-// this makes it useful for modifying the source (.md) file ahead of processing.
-func hookPostFile(filepath string) {
-	if PRINT_HOOK {
-		fmt.Printf("Running post-file-hook on %s:\n", filepath)
-	}
+// this makes it useful for modifying the build (.html) file after of processing.
+func hookPostFile(conf Config, filepath string) {
+	runHookForPrefix(conf, "pof__", []string{filepath})
 }
 
 // this hook is part of the 'build' command.
 // it is called right at the end, after all the processing has finished.
-func hookPost() {
-	if PRINT_HOOK {
-		fmt.Println("Running post-hook:")
-	}
+func hookPost(conf Config) {
+	runHookForPrefix(conf, "poh__", []string{})
 }
 
 //// COMMANDS
@@ -307,6 +333,7 @@ func commandInit() {
 				WithXHTML:     true,
 				WithUnsafe:    false,
 			},
+			Plugins: []string{},
 		}
 
 		// transform the struct to yaml data and write it to a file.
@@ -316,7 +343,7 @@ func commandInit() {
 		checkerr(err)
 
 		// create a default template.html file
-		err = os.WriteFile(defaultConfig.Templatedir, []byte("\n"), 0644)
+		err = os.WriteFile(defaultConfig.Templatedir, []byte("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<title>{{.Title}}</title>\n</head>\n<body>\n{{.Body}}\n</body>\n</html>\n"), 0644)
 		checkerr(err)
 
 		// create a src directory
@@ -325,6 +352,10 @@ func commandInit() {
 
 		// create a build directory
 		err = os.MkdirAll(defaultConfig.Outdir, 0755)
+		checkerr(err)
+
+		// create a plugin directory
+		err = os.MkdirAll(PLUGIN_DIR, 0755)
 		checkerr(err)
 
 		fmt.Printf("Initialized new silvera workspace at %s\n", WORKING_DIR)
@@ -339,7 +370,7 @@ func commandBuild() {
 	config := readConfigFile("silvera.conf", Config{}) // read a new config with an empty parent. This is the global config.
 	os.MkdirAll(config.Outdir, 0755)                   // if necessary, create the build directory as given in the config file.
 
-	hookPre() // run the pre-processing hook
+	hookPre(config) // run the pre-processing hook
 
 	localConfigs := make(map[string]Config) // this map holds configuration structs based on directory names
 
@@ -389,7 +420,7 @@ func commandBuild() {
 			outpath := strings.TrimSuffix(outpath, ".md")
 			outpath = outpath + ".html"
 			// run pre-file-processing hook
-			hookPreFile(path)
+			hookPreFile(localConf, path)
 			// process the file to html
 			html_bytes, err := renderMdToHtml(path, localConf)
 			if err != nil {
@@ -403,9 +434,9 @@ func commandBuild() {
 
 			// write the html byte slice to the file-path determined above, ending in '.md'.
 			err = ioutil.WriteFile(outpath, full_html_bytes, 0644)
-			if err != nil {
+			if err == nil {
 				// if all went well so far, run the post-file-processing hook
-				hookPostFile(outpath)
+				hookPostFile(localConf, outpath)
 			}
 			return err
 			// if some file is encountered that is neither a dir, nor a '.md' file, copy it over to the build
@@ -421,7 +452,7 @@ func commandBuild() {
 	})
 
 	// run the post-processing hook
-	hookPost()
+	hookPost(config)
 }
 
 //// PROCESSING FUNCTIONS
@@ -459,7 +490,6 @@ func embedHtmlInTemplate(html_contents []byte, curr_path string, config Config) 
 		Path  string
 	}
 
-	fmt.Println(config.Templatedir)
 	tmpl := template.Must(template.ParseFiles(config.Templatedir)) // read in the template file, panicking on failure
 
 	contents := EmbeddableContents{
@@ -490,6 +520,7 @@ func init() {
 
 	// source path
 	SOURCE_DIR = filepath.Join(WORKING_DIR, "src/")
+	PLUGIN_DIR = filepath.Join(WORKING_DIR, "plugin/")
 }
 
 // the main function is the entrypoint to this program.
