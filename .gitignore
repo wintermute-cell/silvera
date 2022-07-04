@@ -14,5 +14,5 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Directory used for manual testing
-testdir
+# Directory used for temp files during testing
+testdata/test_*

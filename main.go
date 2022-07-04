@@ -367,8 +367,8 @@ func commandInit() {
 // Only '.md' files are actually processed and turned into '.html' files, all other files and directories are
 // simply copied over.
 func commandBuild() {
-	config := readConfigFile("silvera.conf", Config{}) // read a new config with an empty parent. This is the global config.
-	os.MkdirAll(config.Outdir, 0755)                   // if necessary, create the build directory as given in the config file.
+	config := readConfigFile(filepath.Join(WORKING_DIR, "silvera.conf"), Config{}) // read a new config with an empty parent. This is the global config.
+	os.MkdirAll(config.Outdir, 0755)                                               // if necessary, create the build directory as given in the config file.
 
 	hookPre(config) // run the pre-processing hook
 

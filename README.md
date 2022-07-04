@@ -1,4 +1,3 @@
-# WIP: MISSING FEATURES
 # silvera
 > A minimal, markdown based static-site-generator. Extensible in python and bash with readable source-code.
 
