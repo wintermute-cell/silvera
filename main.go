@@ -58,7 +58,7 @@ type Config struct {
 	Extensions      Exts         `yaml:"extensions"`
 	ParserOptions   ParserOpts   `yaml:"parser_options"`
 	RendererOptions RendererOpts `yaml:"renderer_options"`
-	Plugins         []string     `yaml:"plugins"`
+	Addons          []string     `yaml:"addons"`
 }
 
 // GLOBAL CONSTANTS
@@ -71,7 +71,7 @@ const (
 var (
 	WORKING_DIR string
 	SOURCE_DIR  string
-	PLUGIN_DIR  string
+	ADDON_DIR   string
 )
 
 //// HELPER FUNCTION
@@ -142,13 +142,13 @@ func getMostSpecificConfig(confMap map[string]Config, file_path string) *Config 
 
 // this contains the logic for executing all the hooks, since they behave largely the same.
 func runHookForPrefix(conf Config, prefix string, args []string) {
-	for _, plugin_name := range conf.Plugins {
-		plugin_dir := filepath.Join(PLUGIN_DIR, plugin_name)
-		files, err := ioutil.ReadDir(plugin_dir)
+	for _, addon_name := range conf.Addons {
+		addon_dir := filepath.Join(ADDON_DIR, addon_name)
+		files, err := ioutil.ReadDir(addon_dir)
 		checkerr(err)
 		for _, file := range files {
 			if !file.IsDir() && strings.HasPrefix(file.Name(), prefix) {
-				cmd := filepath.Join(filepath.Join(PLUGIN_DIR, plugin_name), file.Name())
+				cmd := filepath.Join(filepath.Join(ADDON_DIR, addon_name), file.Name())
 				var out []byte
 				ext := filepath.Ext(file.Name())
 				if ext == ".py" {
@@ -162,8 +162,8 @@ func runHookForPrefix(conf Config, prefix string, args []string) {
 				}
 				checkerr(err)
 				if PRINT_HOOK {
-					fmt.Printf("Ran plugin: %s\n", cmd)
-					fmt.Printf("PLUG_OUT:\n %s\n", out)
+					fmt.Printf("Ran addon: %s\n", cmd)
+					fmt.Printf("ADDON_OUT:\n %s\n", out)
 				}
 			}
 		}
@@ -333,7 +333,7 @@ func commandInit() {
 				WithXHTML:     true,
 				WithUnsafe:    false,
 			},
-			Plugins: []string{},
+			Addons: []string{},
 		}
 
 		// transform the struct to yaml data and write it to a file.
@@ -354,8 +354,8 @@ func commandInit() {
 		err = os.MkdirAll(defaultConfig.Outdir, 0755)
 		checkerr(err)
 
-		// create a plugin directory
-		err = os.MkdirAll(PLUGIN_DIR, 0755)
+		// create an addon directory
+		err = os.MkdirAll(ADDON_DIR, 0755)
 		checkerr(err)
 
 		fmt.Printf("Initialized new silvera workspace at %s\n", WORKING_DIR)
@@ -520,7 +520,7 @@ func init() {
 
 	// source path
 	SOURCE_DIR = filepath.Join(WORKING_DIR, "src/")
-	PLUGIN_DIR = filepath.Join(WORKING_DIR, "plugin/")
+	ADDON_DIR = filepath.Join(WORKING_DIR, "addons/")
 }
 
 // the main function is the entrypoint to this program.

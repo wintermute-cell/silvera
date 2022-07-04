@@ -34,18 +34,16 @@ cd my_new_site
 silvera init
 ```
 
-A file called `silvera.conf` will be created, containing some default configuration.
-All available configuration fields are found in this file.
-There are no further config fields.
+A file called `silvera.conf` will be created, containing a default configuration setup.
 
 And create some content:
 
 ```bash
 cd src
-echo "# Hello World" > touch index.md
+echo "# Hello World" > index.md
 mkdir subdirectory
-echo "# Hello Subdirectory" > touch subdirectory/index.md
-echo "# Other File" > touch subdirectory/other.md
+echo "# Hello Subdirectory" > subdirectory/index.md
+echo "# Other File" > subdirectory/other.md
 cd ..
 ```
 
@@ -71,7 +69,8 @@ build
 Basic configuration is done in two files: `silvera.conf` and `template.html`.
 
 ### silvera.conf
-- **outdir**: Where to output the final product.
+- **outdir**: The location at which to output the final product to.
+- **template**: The path where the [template](#template.html) is located.
 - **extensions**
   - **tables**: [GitHub Flavored Markdown: Tables](https://github.github.com/gfm/#tables-extension-)
   - **strikethrough**: [GitHub Flavored Markdown: Strikethrough](https://github.github.com/gfm/#strikethrough-extension-)
@@ -90,6 +89,7 @@ Basic configuration is done in two files: `silvera.conf` and `template.html`.
   - **hard_wraps**: Renders newlines as `<br>`.
   - **xhtml**: Renders as `XHTML` (just leave this enabled if you've never heard of XHTML).
   - **unsafe_rendering**: Allow for the rendering of potentially dangerous links or raw HTML. **So if you want to use raw HTML mixed with Markdown, turn this on.**
+- **addons**: A list of active addon names (as strings).
 
 ### template.html
 This file specifies the HTML environment, in which the converted Markdown content is put it.
@@ -143,42 +143,44 @@ This local configuration file will affect `file2`, `file3` and `file4`, but not 
 Addons are (mostly user written) pieces of code/script, that extend the functionality of `silvera` from the outside.
 They act on their own, without the context of the `silvera` process, using their own data.
 The name `addon` is chosen in favor of `extension` to make them easier to differentiate from the builtin extension options (see [silvera.conf](#silveraconf)).
-`Plugin` would also not be fitting, as `addons` mostly work "on-top" or "around" `silvera`, and are not part of the programs main process.
+`addon` would also not be fitting, as `addons` mostly work "on-top" or "around" `silvera`, and are not part of the programs main process.
 
 *Note: `Addons` may come with their own dependencies, such as a `.py` script requiring a python installation.*
 
-### Using plugins
-You first have to install a plugin to be able to use it.
-To do this, simply move a plugins directory to your workspaces' `plugin` directory.
+### Using addons
+You first have to install a addon to be able to use it.
+To do this, simply move a addons directory to your workspaces' `addon` directory.
 
 Lets take [silvera-html-format](TODO) as an example.
-Clone the plugin into your `plugin` directory like this:
+Clone the addon into your `addon` directory like this:
 ```bash
-cd plugins
+cd addons
 git clone https://github.com/wintermute-cell/silvera-html-format
 ```
-Done! Running `ls` should reveal a single `silvera-html-format` directory inside your `plugins` directory.
+Done! Running `ls` should reveal a single `silvera-html-format` directory inside your `addons` directory.
 
-Now you can go ahead and enable the plugin.
+Now you can go ahead and enable the addon.
 This is done through [silvera.conf](#silveraconf).
-In the `plugins` field, add the directory name of your newly installed plugin (`silvera-html-format`) to the list:
+In the `addons` field, add the directory name of your newly installed addon (`silvera-html-format`) to the list:
 ```yaml
-plugins:
+addons:
   - silvera-html-format
 ```
 (also valid:)
 ```yaml
-plugins: ['silvera-html-format']
+addons: ['silvera-html-format']
 ```
 
-Done! The plugin will now work as expected.
-Note that you can also utilize the [local config sytem](#local-cascading-configuration) to manage directory specific plugins.
+Done! The addons will now work as expected.
+Note that you can also utilize the [local config sytem](#local-cascading-configuration) to manage directory specific addons.
 
-### Existing plugins
-A managed (probably incomplete) list of plugins can be found here: [plugin list](plugin_list.md)
+### Existing addons
+A managed (probably incomplete) list of addons can be found here: [addon list](ADDONLIST.md).
 
-### Writing your own
-To begin writing a plugin, create a directory for your files to live in.
+### Writing your own addon
+> Should you be willing to share you addon, you are invited to open a pull request to add an entry in the [addon list](ADDONLIST.md).
+
+To begin writing a addon, create a directory for your files to live in.
 Inside that directory, you can place any number of executable files, which **have** to obey the following naming guidelines:
 
 - `prh__FILENAME.ext` for `pre-hook` files.
@@ -186,28 +188,30 @@ Inside that directory, you can place any number of executable files, which **hav
 - `pof__FILENAME.ext` for `post-file-hook` files.
 - `poh__FILENAME.ext` for `post-hook` files.
 
-plugin files use the `hook`-system to know when they have to be called, and with what arguments.
+addon files use the `hook`-system to know when they have to be called, and with what arguments.
 There are 4 available hooks in `silvera`:
 - pre-hook: Called right at the beginning, before any processing happens.
 - pre-file-hook: Called right before a Markdown file is read for processing.
-  As a first argument, plugins for this hook are given the path of the respective file.
+  As a first argument, addons for this hook are given the path of the respective file.
   This makes it useful for modifying the source (.md) file ahead of processing.
 - post-file-hook: Called right before a Markdown file is read for processing.
-  As a first argument, plugins for this hook are given the path of the respective file.
+  As a first argument, addons for this hook are given the path of the respective file.
   This makes it useful for modifying the build (.html) file after of processing.
 - post-hook: Called right at the end, after all the processing has finished.
 
-All plugin files in one directory compose a single plugin.
+All addon files in one directory compose a single addon.
 This way, you could use `...-file-hook` executables to gather data, about all the files, save that data in a temporary file,
 and then use the data in a `post-hook` executable. For example gathering titles and building a nav-menu out of these titles at the end.
 
 For a single hook, executables are called in alphabetical order.
 You should prefix the filenames with numbers, so indicate a clear order, like `prf__0FILENAME.ext` and `prf__1FILENAME.ext`.
 
+> HINT: You can set the `PRINT_HOOK` constant in `main.go` to true, to get verbose output about addon activity, and also output your addons stdout.
+
 ## Contributing
 All contributions are generally welcome, within the above declared spirit of the program.
 If you're having problems and don't know how to fix them yourself,
-please report the issue at the [issues page]( https://github.com/wintermute-cell/silver/issues ).
+please report the issue at the [issues page]( https://github.com/wintermute-cell/silvera/issues ).
 
 ## License
 This project uses [GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html).
