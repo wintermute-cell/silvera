@@ -23,6 +23,19 @@ I wanted an ssg that met the following requirements:
     A user should be able to find an explanation for every question regarding `silvera`,
     be it in this document, or in the source-code. No feature should be left unexplained or without example.
 
+## Installation
+Depending on your preferences, build a binary, and put that somewhere in your `PATH`:
+```bash
+go build -o silvera main.go
+mv silvera /usr/local/bin
+```
+Then you can just do `silvera init` wherever you want.
+
+Or you could just `go run` like:
+```bash
+go run /path/to/silvera/main.go init
+```
+
 ## Basic Usage
 First, initialize a chosen directory as a `workspace`.
 Here you will put all the website-source- and configuration-files.
