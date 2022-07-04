@@ -526,7 +526,7 @@ func init() {
 // the main function is the entrypoint to this program.
 // here, arguments are read, and interpreted as commands.
 func main() {
-	registerCommands()
+	registerCommands() // register the command functions in the commands map
 
 	// check if enough args are supplied
 	if len(os.Args) < 2 {
@@ -537,9 +537,9 @@ func main() {
 
 	// run command if possible
 	cmd := os.Args[1]
-	if cmdFunc, ok := commands[cmd]; ok {
+	if cmdFunc, ok := commands[cmd]; ok { // if the command we ask for exists...
 		cmdFunc()
-	} else {
+	} else { // and if it doesn't exist...
 		fmt.Printf("Unknown command %s\n", cmd)
 		printUsage()
 		return

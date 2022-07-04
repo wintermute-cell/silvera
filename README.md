@@ -4,8 +4,9 @@
 
 ## Motivation
 None of the available static-site-generators (ssg) fit my needs.
-They are either too big and complex (see [Hugo](https://gohugo.io/)),
-or unmaintained (see [zs](https://github.com/zserge/zs)).
+They either offer too many features (see [Hugo](https://gohugo.io/)),
+or are unmaintained (see [zs](https://github.com/zserge/zs)),
+or lack the extensibility.
 
 I wanted an ssg that met the following requirements:
 - **Modifiable**:\
@@ -96,7 +97,7 @@ The file does not have to be named `template.html`; you can specify the path to 
 The template format follows golangs [text/template](https://pkg.go.dev/text/template) format;
 In short, this means you can write normal  `html` (or whatever text you'd like), and use markers like `{{.Title}}` to embed generated content.
 
-There are a number of fixed markers available:
+There are a number of markers available:
 - {{.Title}}: An auto detected title of the page (the contents of the first h1 element).
 - {{.Body}}:  The actual contents that were generated from Markdown.
 - {{.Path}}:  The respective files relative path.
@@ -202,3 +203,11 @@ and then use the data in a `post-hook` executable. For example gathering titles 
 
 For a single hook, executables are called in alphabetical order.
 You should prefix the filenames with numbers, so indicate a clear order, like `prf__0FILENAME.ext` and `prf__1FILENAME.ext`.
+
+## Contributing
+All contributions are generally welcome, within the above declared spirit of the program.
+If you're having problems and don't know how to fix them yourself,
+please report the issue at the [issues page]( https://github.com/wintermute-cell/silver/issues ).
+
+## License
+This project uses [GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html).
