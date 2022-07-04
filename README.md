@@ -212,5 +212,11 @@ All contributions are generally welcome, within the above declared spirit of the
 If you're having problems and don't know how to fix them yourself,
 please report the issue at the [issues page]( https://github.com/wintermute-cell/silvera/issues ).
 
+### Testing
+To run the test, use `go test` from inside the project directory. The test will create a mock-workspace using `silvera init`, run `silvera build`,
+and compare the results with the pregenerated results in `testdata/correct_results`.
+The test-generated files will be put in `testdata/test_env` for the workspace and `testdata/test_results` for the built files;
+there you can manually observe them after the test.
+
 ## License
 This project uses [GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html).
