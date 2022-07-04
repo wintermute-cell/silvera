@@ -147,8 +147,8 @@ The name `addon` is chosen in favor of `extension` to make them easier to differ
 *Note: `Addons` may come with their own dependencies, such as a `.py` script requiring a python installation.*
 
 ### Using addons
-You first have to install a addon to be able to use it.
-To do this, simply move a addons directory to your workspaces' `addon` directory.
+You first have to install an addon to be able to use it.
+To do this, simply move an addons directory to your workspaces' `addon` directory.
 
 Lets take [silvera-html-format](TODO) as an example.
 Clone the addon into your `addon` directory like this:
@@ -179,7 +179,7 @@ A managed (probably incomplete) list of addons can be found here: [addon list](A
 ### Writing your own addon
 > Should you be willing to share you addon, you are invited to open a pull request to add an entry in the [addon list](ADDONLIST.md).
 
-To begin writing a addon, create a directory for your files to live in.
+To begin writing an addon, create a directory for your files to live in.
 Inside that directory, you can place any number of executable files, which **have** to obey the following naming guidelines:
 
 - `prh__FILENAME.ext` for `pre-hook` files.
