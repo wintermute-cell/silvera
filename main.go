@@ -23,6 +23,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+//// CONFIG STRUCTS
+// the following stucts, combined together, define the `silvera.conf` user config.
+// -----------------------------------------------------------------------------------
+
 // this struct contains the user config values regarding internal goldmark (gm) extensions.
 type Exts struct {
 	Table           bool `yaml:"tables"`
@@ -447,6 +451,9 @@ func commandBuild() {
 				return err
 			}
 			err = ioutil.WriteFile(outpath, srcfile, 0644) // write it back to the build dir
+			if err == nil {
+				fmt.Println("cp:", relpath, "->", outpath)
+			}
 			return err
 		}
 	})
